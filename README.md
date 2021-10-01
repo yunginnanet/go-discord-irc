@@ -5,34 +5,31 @@
 
 [![Preview](https://i.imgur.com/YpCqzdn.gif)](https://i.imgur.com/YpCqzdn.webm)
 
-**Is this being maintained?** Yes. But I want to merge all this functionality
-into the much superior
+**Is this being maintained?** Yes. But I want to merge all this functionality into the much superior
 [matterbridge by 42wim](https://github.com/42wim/matterbridge).
 
 This is IRC to Discord bridge was originally built for
 [@compsoc-edinburgh](http://github.com/compsoc-edinburgh) and
-[ImaginaryNet](http://imaginarynet.uk/), but now it looks like more people are
-using it!
+[ImaginaryNet](http://imaginarynet.uk/), but now it looks like more people are using it!
 
-- The `IRC -> Discord` side of things work as you would expect it to: messages
-  on IRC send to Discord as the bot user, as per usual.
-- The `Discord -> IRC` side of things is a little different. On connect, this
-  bot will join the server with the `~d`, and spawn additional connections for
-  each online person in the Discord.
+- The `IRC -> Discord` side of things work as you would expect it to: messages on IRC send to Discord as the bot user,
+  as per usual.
+- The `Discord -> IRC` side of things is a little different. On connect, this bot will join the server with the `~d`,
+  and spawn additional connections for each online person in the Discord.
 - Supports bidirectional PMs. (Not user friendly, but it works.)
 
 **Features**
 
 (not a full list)
 
-- Every Discord user in your server will join your channel. Messages come from those "puppets", not from a single chat bridge user.
+- Every Discord user in your server will join your channel. Messages come from those "puppets", not from a single chat
+  bridge user.
 - Saying the puppet username will @ that person on Discord.
-- When a Discord user's presence is "offline" or "idle", their irc puppet will
-  have their AWAY status set.
-- A Discord user offline for will disconnect from IRC after 24 hours (or
-  whatever `cooldown_duration` you set).
+- When a Discord user's presence is "offline" or "idle", their irc puppet will have their AWAY status set.
+- A Discord user offline for will disconnect from IRC after 24 hours (or whatever `cooldown_duration` you set).
 - Join/Quit/Part/Kick messages are sent to Discord (configurable!)
-- Replying to someone on Discord will prefix that someone's name, e.g. replying to Alex with "yes that's fine" will show up as `<you> Alex: yes, that's fine` on IRC.
+- Replying to someone on Discord will prefix that someone's name, e.g. replying to Alex with "yes that's fine" will show
+  up as `<you> Alex: yes, that's fine` on IRC.
 - IRC users can send (custom!) emoji to Discord, just do `:somename:`. Discord emoji shows up like that on IRC.
 - Reacting to a Discord message will send a CTCP ACTION (`/me`) on IRC.
 
@@ -40,18 +37,16 @@ using it!
 
 Things to keep in mind in terms of functionality:
 
-- This does not work with private Discord channels properly (all discord users
-  are added to the channel)
+- This does not work with private Discord channels properly (all discord users are added to the channel)
 - **DO NOT USE THE SAME DISCORD BOT (API KEY) ACROSS MULTIPLE GUILDS
   (SERVERS).**
 
-It's built with configuration in mind, but may need a little bit of tweaking for
-it to work for you:
+It's built with configuration in mind, but may need a little bit of tweaking for it to work for you:
 
 - **Hardcoded**: Hostnames are hardcoded to follow the IPv6 IPs listed
   [here](https://github.com/qaisjp/go-discord-irc/issues/2).
-- **Defaults aren't usable**: You should set the `suffix` and `separator` config
-  options. The default options require custom modifications to the IRC server.
+- **Defaults aren't usable**: You should set the `suffix` and `separator` config options. The default options require
+  custom modifications to the IRC server.
 - **Server config**: This uses `WEBIRC` to give Discord users on IRC a distinct
   hostname. [See here](https://kiwiirc.com/docs/webirc).
 
@@ -59,13 +54,11 @@ it to work for you:
 
 The binary takes three flags:
 
-- `--config filename.yaml`: to pass along a configuration file containing things
-  like passwords and channel options
-- `--simple`: to only spawn one connection (the listener will send across
-  messages from Discord) instead of a connection per online Discord user
-- `--debug`: provide this flag to print extra debug info. Setting this flag to
-  false (or not providing this flag) will take the value from the config file
-  instead
+- `--config filename.yaml`: to pass along a configuration file containing things like passwords and channel options
+- `--simple`: to only spawn one connection (the listener will send across messages from Discord) instead of a connection
+  per online Discord user
+- `--debug`: provide this flag to print extra debug info. Setting this flag to false (or not providing this flag) will
+  take the value from the config file instead
 - `--insecure`: used to skip TLS verification (false = use value from settings)
 - `--no-tls`: turns off TLS
 
@@ -83,7 +76,8 @@ The config file is a yaml formatted file with the following fields:
 | `guild_id`                      | No               |                                                | No                           | the Discord guild (server) id                                                                                                                                            |
 | `irc_pass`                      | Yes              |                                                | Yes                          | password for connecting to the IRC server                                                                                                                                |
 | `suffix`                        | No               | `~d`                                           | Yes                          | appended to each Discord user's nickname when they are connected to IRC. If set to `_d2`, if the name will be `bob_d2`                                                   |
-| `separator`                     | No               | `_`                                            | Yes                          | used in fallback situations. If set to `-`, the **fallback name** will be like `bob-7247_d2` (where `7247` is the discord user's discriminator, and `_d2` is the suffix) |
+| `separator`                     | No               | `_`                                            | Yes                          | used in fallback situations. If set to `-`, the **
+fallback name** will be like `bob-7247_d2` (where `7247` is the discord user's discriminator, and `_d2` is the suffix) |
 | `irc_listener_name`             | Yes              | `~d`                                           | The name of the irc listener |                                                                                                                                                                          |
 | `ignored_discord_ids`           | Sometimes        |                                                | Yes                          | A list of Discord IDs to not relay to IRC                                                                                                                                |
 | `allowed_discord_ids`           | Sometimes        | `null`                                         | Yes                          | A list of Discord IDs to relay to IRC. `null` allows all Discord users to be relayed to IRC. Hot reload: IDs added to the list require a presence change to take effect. |
@@ -100,13 +94,11 @@ The config file is a yaml formatted file with the following fields:
 | `ignored_irc_hostmasks`         | No               |                                                | Yes                          | A list of IRC users identified by hostmask to not relay to Discord, uses matching syntax as in [glob](https://github.com/gobwas/glob)                                    |
 | `connection_limit`              | Yes              | 0                                              | Yes                          | How many connections to IRC (including our listener) to spawn (limit of 0 or less means unlimited)                                                                       |
 
-**The filename.yaml file is continuously read from and many changes will
-automatically update on the bridge. This means you can add or remove channels
-without restarting the bot.**
+**The filename.yaml file is continuously read from and many changes will automatically update on the bridge. This means
+you can add or remove channels without restarting the bot.**
 
-An example configuration file can be seen in [`config.yml`](./config.yml). Those
-marked as `requires restart` definitely require restart, but others may not
-currently be configured to automatically update.
+An example configuration file can be seen in [`config.yml`](./config.yml). Those marked as `requires restart` definitely
+require restart, but others may not currently be configured to automatically update.
 
 This bot needs permissions to manage webhooks as it creates webhooks on the go.
 
@@ -122,9 +114,8 @@ Make sure you also give the bot application these intents too:
 
 ## Docker
 
-First edit `config.yml` file to your needs.
-Then launch `docker build -t go-discord-irc .` in the repository root folder.
-And then `docker run -d go-discord-irc` to run the bot in background.
+First edit `config.yml` file to your needs. Then launch `docker build -t go-discord-irc .` in the repository root
+folder. And then `docker run -d go-discord-irc` to run the bot in background.
 
 ## Development
 

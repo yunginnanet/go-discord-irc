@@ -28,7 +28,7 @@ const (
 	FCHAN_C
 	FNICK_C
 
-// add )
+	// add )
 )
 
 // MAXLENGTH is the maximum length of a nickname

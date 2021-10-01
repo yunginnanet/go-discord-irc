@@ -6,22 +6,21 @@ package varys
 
 import (
 	"crypto/tls"
-	"fmt"
 	"strings"
 
-	irc "github.com/qaisjp/go-ircevent"
+	irc "git.tcp.direct/kayos/girc-tcpd"
 )
 
 type Varys struct {
 	connConfig SetupParams
-	uidToConns map[string]*irc.Connection
+	uidToConns map[string]*irc.Client
 }
 
 func NewVarys() *Varys {
-	return &Varys{uidToConns: make(map[string]*irc.Connection)}
+	return &Varys{uidToConns: make(map[string]*irc.Client)}
 }
 
-func (v *Varys) connCall(uid string, fn func(*irc.Connection)) {
+func (v *Varys) connCall(uid string, fn func(*irc.Client)) {
 	if uid == "" {
 		for _, conn := range v.uidToConns {
 			fn(conn)
@@ -83,46 +82,52 @@ type ConnectParams struct {
 	WebIRCSuffix string
 
 	// TODO(qaisjp): does not support net/rpc!!!!
-	Callbacks map[string]func(*irc.Event)
+	Callbacks map[string]func(c *irc.Client, e irc.Event)
 }
 
 func (v *Varys) Connect(params ConnectParams, _ *struct{}) error {
-	conn := irc.IRC(params.Nick, params.Username)
-	// conn.Debug = true
-	conn.RealName = params.RealName
+	conn := irc.Config{
+		Nick:    params.Nick,
+		User:    params.Username,
+		Name:    params.RealName,
+		Version: "tcp.direct",
+
+		SSL: false,
+	}
 
 	// TLS things, and the server password
-	conn.Password = v.connConfig.ServerPassword
-	conn.UseTLS = v.connConfig.UseTLS
+	conn.ServerPass = v.connConfig.ServerPassword
+	if v.connConfig.UseTLS {
+		conn.SSL = true
+	}
+
 	if v.connConfig.InsecureSkipVerify {
 		conn.TLSConfig = &tls.Config{
 			InsecureSkipVerify: true,
 		}
 	}
 
-	// Set up WebIRC, if a suffix is provided
-	if params.WebIRCSuffix != "" {
-		conn.WebIRC = v.connConfig.WebIRCPassword + " " + params.WebIRCSuffix
-	}
+	client := irc.New(conn)
 
 	// On kick, rejoin the channel
-	conn.AddCallback("KICK", func(e *irc.Event) {
-		if e.Arguments[1] == conn.GetNick() {
-			conn.Join(e.Arguments[0])
+	client.Handlers.Add("KICK", func(c *irc.Client, e irc.Event) {
+		if e.Params[1] == client.GetNick() {
+			c.Cmd.Join(e.Params[0])
 		}
 	})
 
 	for eventcode, callback := range params.Callbacks {
-		conn.AddCallback(eventcode, callback)
+		client.Handlers.Add(eventcode, callback)
 	}
 
-	err := conn.Connect(v.connConfig.Server)
-	if err != nil {
-		return fmt.Errorf("error opening irc connection: %w", err)
-	}
+	go func() {
+		err := client.Connect()
+		if err != nil {
+			println("error opening irc connection: %w", err)
+		}
+	}()
 
-	v.uidToConns[params.UID] = conn
-	go conn.Loop()
+	v.uidToConns[params.UID] = client
 	return nil
 }
 
@@ -133,9 +138,8 @@ type QuitParams struct {
 
 func (v *Varys) QuitIfConnected(params QuitParams, _ *struct{}) error {
 	if conn, ok := v.uidToConns[params.UID]; ok {
-		if conn.Connected() {
-			conn.QuitMessage = params.QuitMessage
-			conn.Quit()
+		if conn.IsConnected() {
+			conn.Quit(params.QuitMessage)
 		}
 	}
 	delete(v.uidToConns, params.UID)
@@ -153,12 +157,12 @@ type SendRawParams struct {
 }
 
 func (v *Varys) SendRaw(params SendRawParams, _ *struct{}) error {
-	v.connCall(params.UID, func(c *irc.Connection) {
+	v.connCall(params.UID, func(c *irc.Client) {
 		for _, msg := range params.Messages {
 			if params.Interpolation.Nick {
 				msg = strings.ReplaceAll(msg, "${NICK}", c.GetNick())
 			}
-			c.SendRaw(msg)
+			c.Cmd.SendRaw(msg)
 		}
 	})
 	return nil
@@ -173,7 +177,7 @@ func (v *Varys) GetNick(uid string, result *string) error {
 
 func (v *Varys) Connected(uid string, result *bool) error {
 	if conn, ok := v.uidToConns[uid]; ok {
-		*result = conn.Connected()
+		*result = conn.IsConnected()
 	}
 
 	return nil
@@ -186,7 +190,7 @@ type NickParams struct {
 
 func (v *Varys) Nick(params NickParams, _ *struct{}) error {
 	if conn, ok := v.uidToConns[params.UID]; ok {
-		conn.Nick(params.Nick)
+		conn.Cmd.Nick(params.Nick)
 	}
 	return nil
 }

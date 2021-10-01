@@ -9,10 +9,11 @@ import (
 	"github.com/mozillazg/go-unidecode"
 	"github.com/pkg/errors"
 
+	irc "git.tcp.direct/kayos/girc-tcpd"
+	log "github.com/sirupsen/logrus"
+
 	ircnick "github.com/qaisjp/go-discord-irc/irc/nick"
 	"github.com/qaisjp/go-discord-irc/irc/varys"
-	irc "github.com/qaisjp/go-ircevent"
-	log "github.com/sirupsen/logrus"
 )
 
 // DevMode is a hack
@@ -258,7 +259,7 @@ func (m *IRCManager) HandleUser(user DiscordUser) {
 
 		WebIRCSuffix: fmt.Sprintf("discord %s %s", hostname, ip),
 
-		Callbacks: map[string]func(*irc.Event){
+		Callbacks: map[string]func(c *irc.Client, e irc.Event){
 			"001":     con.OnWelcome,
 			"PRIVMSG": con.OnPrivateMessage,
 		},
@@ -394,7 +395,7 @@ func (m *IRCManager) SendMessage(channel string, msg *DiscordMessage) {
 	if !ok {
 		length := len(msg.Author.Username)
 		for _, line := range strings.Split(content, "\n") {
-			m.bridge.ircListener.Privmsg(channel, fmt.Sprintf(
+			m.bridge.ircListener.Client.Cmd.Message(channel, fmt.Sprintf(
 				"<%s#%s> %s",
 				msg.Author.Username[:1]+"\u200B"+msg.Author.Username[1:length],
 				msg.Author.Discriminator,

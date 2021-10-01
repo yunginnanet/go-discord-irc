@@ -5,9 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qaisjp/go-discord-irc/irc/varys"
-	irc "github.com/qaisjp/go-ircevent"
+	irc "git.tcp.direct/kayos/girc-tcpd"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/qaisjp/go-discord-irc/irc/varys"
 )
 
 // An ircConnection should only ever communicate with its manager
@@ -47,9 +48,9 @@ func (i *ircConnection) Connected() bool {
 	return connected
 }
 
-func (i *ircConnection) OnWelcome(e *irc.Event) {
+func (i *ircConnection) OnWelcome(c *irc.Client, e irc.Event) {
 	// execute puppet prejoin commands
-	err := i.manager.varys.SendRaw(i.discord.ID, varys.InterpolationParams{Nick: true}, i.manager.bridge.Config.IRCPuppetPrejoinCommands...)
+	err := i.manager.varys.SendRaw(i.discord.ID, varys.InterpolationParams{Nick: true})
 	if err != nil {
 		panic(err.Error())
 	}
@@ -132,27 +133,27 @@ func (i *ircConnection) introducePM(nick string) {
 	}
 }
 
-func (i *ircConnection) OnPrivateMessage(e *irc.Event) {
+func (i *ircConnection) OnPrivateMessage(c *irc.Client, e irc.Event) {
 	// Ignored hostmasks
-	if i.manager.isIgnoredHostmask(e.Source) {
+	if i.manager.isIgnoredHostmask(e.Source.String()) {
 		return
 	}
 
 	// Alert private messages
-	if string(e.Arguments[0][0]) != "#" {
-		if e.Message() == "help" {
-			i.Privmsg(e.Nick, "Commands: help, who")
-		} else if e.Message() == "who" {
-			i.Privmsg(e.Nick, fmt.Sprintf("I am: %s#%s with ID %s", i.discord.Nick, i.discord.Discriminator, i.discord.ID))
+	if string(e.Params[0][0]) != "#" {
+		if e.Last() == "help" {
+			i.Privmsg(e.Source.Name, "Commands: help, who")
+		} else if e.Last() == "who" {
+			i.Privmsg(e.Source.Name, fmt.Sprintf("I am: %s#%s with ID %s", i.discord.Nick, i.discord.Discriminator, i.discord.ID))
 		}
 
 		d := i.manager.bridge.discord
 
-		i.introducePM(e.Nick)
+		i.introducePM(e.Source.Name)
 
 		msg := fmt.Sprintf(
-			"%s,%s - %s@%s: %s", e.Connection.Server, e.Source,
-			e.Nick, i.manager.bridge.Config.Discriminator, e.Message())
+			"%s - %s@%s: %s", e.Source,
+			e.Source.Name, i.manager.bridge.Config.Discriminator, e.Last())
 		_, err := d.Session.ChannelMessageSend(i.pmDiscordChannel, msg)
 		if err != nil {
 			log.Warnln("Could not send PM", i.discord, err)

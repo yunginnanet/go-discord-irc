@@ -1,74 +1,81 @@
 package bridge
 
 import (
+	"crypto/tls"
 	"fmt"
+	"os"
 	"strings"
+	"time"
+
+	irc "git.tcp.direct/kayos/girc-tcpd"
+	log "github.com/sirupsen/logrus"
 
 	ircf "github.com/qaisjp/go-discord-irc/irc/format"
-	irc "github.com/qaisjp/go-ircevent"
-	log "github.com/sirupsen/logrus"
 )
 
 type ircListener struct {
-	*irc.Connection
+	*irc.Client
 	bridge *Bridge
 
 	listenerCallbackIDs map[string]int
 }
 
 func newIRCListener(dib *Bridge, webIRCPass string) *ircListener {
-	irccon := irc.IRC(dib.Config.IRCListenerName, "discord")
-	listener := &ircListener{irccon, dib, make(map[string]int)}
+	var ircConfig = irc.Config{
+		Server:     dib.Config.IRCListenerName,
+		User:       dib.Config.IRCListenerName,
+		Nick:       dib.Config.IRCListenerName,
+		ServerPass: dib.Config.IRCServerPass,
+		Version:    "tcp.direct",
+	}
 
-	dib.SetupIRCConnection(irccon, "discord.", "fd75:f5f5:226f::")
-	listener.SetDebugMode(dib.Config.Debug)
+	if dib.Config.Debug {
+		ircConfig.Debug = os.Stdout
+	}
 
-	// Nick tracker for nick tracking
-	irccon.SetupNickTrack()
+	if !dib.Config.NoTLS {
+		ircConfig.SSL = true
+		ircConfig.TLSConfig = &tls.Config{
+			InsecureSkipVerify: dib.Config.InsecureSkipVerify,
+		}
+	}
 
-	// Welcome event
-	irccon.AddCallback("001", listener.OnWelcome)
+	ircClient := irc.New(ircConfig)
 
-	// Called when received channel names... essentially OnJoinChannel
-	irccon.AddCallback("366", listener.OnJoinChannel)
-	irccon.AddCallback("PRIVMSG", listener.OnPrivateMessage)
-	irccon.AddCallback("NOTICE", listener.OnPrivateMessage)
-	irccon.AddCallback("CTCP_ACTION", listener.OnPrivateMessage)
-
-	irccon.AddCallback("900", func(e *irc.Event) {
-		// Try to rejoni channels after authenticated with NickServ
-		listener.JoinChannels()
+	// On kick, rejoin the channel
+	ircClient.Handlers.Add("KICK", func(c *irc.Client, e irc.Event) {
+		if e.Params[1] == c.GetNick() {
+			c.Cmd.Join(e.Params[0])
+		}
 	})
 
-	// we are assuming this will be posible to run independent of any
-	// future NICK callbacks added, otherwise do it like the STQUIT callback
-	listener.AddCallback("NICK", listener.nickTrackNick)
+	listener := &ircListener{ircClient, dib, make(map[string]int)}
 
-	// Note that this might override SetupNickTrack!
-	listener.OnJoinQuitSettingChange()
+	// Welcome event
+	ircClient.Handlers.Add(irc.CONNECTED, listener.JoinChannels)
+
+	// Called when received channel names... essentially OnJoinChannel
+	ircClient.Handlers.Add("366", listener.OnJoinChannel)
+	ircClient.Handlers.Add("PRIVMSG", listener.OnPrivateMessage)
+	ircClient.Handlers.Add("NOTICE", listener.OnPrivateMessage)
+	ircClient.Handlers.Add("CTCP_ACTION", listener.OnPrivateMessage)
+
+	// Try to rejoin channels after authenticated with NickServ
+	ircClient.Handlers.Add("900", listener.JoinChannels)
 
 	return listener
 }
 
-func (i *ircListener) nickTrackNick(event *irc.Event) {
-	oldNick := event.Nick
-	newNick := event.Message()
-	if con, ok := i.bridge.ircManager.puppetNicks[oldNick]; ok {
-		i.bridge.ircManager.puppetNicks[newNick] = con
-		delete(i.bridge.ircManager.puppetNicks, oldNick)
-	}
-}
-
-func (i *ircListener) OnNickRelayToDiscord(event *irc.Event) {
+func (i *ircListener) OnNickRelayToDiscord(e irc.Event) {
 	// ignored hostmasks, or we're a puppet? no relay
-	if i.bridge.ircManager.isIgnoredHostmask(event.Source) ||
-		i.isPuppetNick(event.Nick) ||
-		i.isPuppetNick(event.Message()) {
+	if i.bridge.ircManager.isIgnoredHostmask(e.Source.String()) ||
+		i.isPuppetNick(e.Source.Name) ||
+		i.isPuppetNick(e.Last()) {
 		return
 	}
 
-	oldNick := event.Nick
-	newNick := event.Message()
+	oldNick := e.Source.Name
+	newNick := e.Last()
 
 	msg := IRCMessage{
 		Username: "",
@@ -77,8 +84,9 @@ func (i *ircListener) OnNickRelayToDiscord(event *irc.Event) {
 
 	for _, m := range i.bridge.mappings {
 		channel := m.IRCChannel
-		if channelObj, ok := i.Connection.GetChannel(channel); ok {
-			if _, ok := channelObj.GetUser(newNick); ok {
+
+		if channelObj := i.Client.LookupChannel(channel); channelObj != nil {
+			if channelObj.UserIn(newNick) {
 				msg.IRCChannel = channel
 				i.bridge.discordMessagesChan <- msg
 			}
@@ -86,79 +94,55 @@ func (i *ircListener) OnNickRelayToDiscord(event *irc.Event) {
 	}
 }
 
-func (i *ircListener) nickTrackPuppetQuit(e *irc.Event) {
+func (i *ircListener) nickTrackPuppetQuit(e irc.Event) {
 	// Protect against HostServ changing nicks or ircd's with CHGHOST/CHGIDENT or similar
 	// sending us a QUIT for a puppet nick only for it to rejoin right after.
 	// The puppet nick won't see a true disconnection itself and thus will still see itself
 	// as connected.
-	if con, ok := i.bridge.ircManager.puppetNicks[e.Nick]; ok && !con.Connected() {
-		delete(i.bridge.ircManager.puppetNicks, e.Nick)
+	if con, ok := i.bridge.ircManager.puppetNicks[e.Source.Name]; ok && !con.Connected() {
+		delete(i.bridge.ircManager.puppetNicks, e.Source.Name)
 	}
 }
 
-func (i *ircListener) OnJoinQuitSettingChange() {
-	// always remove our listener callbacks
-	for ev, id := range i.listenerCallbackIDs {
-		i.RemoveCallback(ev, id)
-		delete(i.listenerCallbackIDs, ev)
-	}
-
-	// we're either going to track quits, or track and relay said, so swap out the callback
-	// based on which is in effect.
-	if i.bridge.Config.ShowJoinQuit {
-		i.listenerCallbackIDs["STNICK"] = i.AddCallback("STNICK", i.OnNickRelayToDiscord)
-
-		// KICK is not state tracked!
-		callbacks := []string{"STJOIN", "STPART", "STQUIT", "KICK"}
-		for _, cb := range callbacks {
-			id := i.AddCallback(cb, i.OnJoinQuitCallback)
-			i.listenerCallbackIDs[cb] = id
-		}
-	} else {
-		id := i.AddCallback("STQUIT", i.nickTrackPuppetQuit)
-		i.listenerCallbackIDs["STQUIT"] = id
-	}
-}
-
-func (i *ircListener) OnJoinQuitCallback(event *irc.Event) {
+func (i *ircListener) OnJoinQuitCallback(e irc.Event) {
 	// This checks if the source of the event was from a puppet.
-	if (event.Code == "KICK" && i.isPuppetNick(event.Arguments[1])) || i.isPuppetNick(event.Nick) {
+	if (e.Command == "KICK" && i.isPuppetNick(e.Params[1])) || i.isPuppetNick(e.Source.Name) {
 		// since we replace the STQUIT callback we have to manage our puppet nicks when
 		// this call back is active!
-		if event.Code == "STQUIT" {
-			i.nickTrackPuppetQuit(event)
+		if e.Command == "STQUIT" {
+			i.nickTrackPuppetQuit(e)
 		}
 		return
 	}
 
 	// Ignored hostmasks
-	if i.bridge.ircManager.isIgnoredHostmask(event.Source) {
+	if i.bridge.ircManager.isIgnoredHostmask(e.Source.String()) {
 		return
 	}
 
-	who := event.Nick
-	message := event.Nick
-	id := " (" + event.User + "@" + event.Host + ") "
+	who := e.Source.Name
+	message := e.Source.Name
+	id := " (" + e.Source.Ident + "@" + e.Source.Host + ") "
 
-	switch event.Code {
+	switch e.Command {
 	case "STJOIN":
 		message += " joined" + id
 	case "STPART":
 		message += " left" + id
-		if len(event.Arguments) > 1 {
-			message += ": " + event.Arguments[1]
+		if len(e.Params) > 1 {
+			message += ": " + e.Params[1]
 		}
 	case "STQUIT":
 		message += " quit" + id
 
-		reason := event.Nick
-		if len(event.Arguments) == 1 {
-			reason = event.Arguments[0]
+		reason := e.Source.Name
+		if len(e.Params) == 1 {
+			reason = e.Params[0]
 		}
 		message += "Quit: " + reason
 	case "KICK":
-		who = event.Arguments[1]
-		message = event.Arguments[1] + " was kicked by " + event.Nick + ": " + event.Arguments[2]
+		who = e.Params[1]
+		message = e.Params[1] + " was kicked by " + e.Source.Name + ": " + e.Params[2]
 	}
 
 	msg := IRCMessage{
@@ -167,38 +151,38 @@ func (i *ircListener) OnJoinQuitCallback(event *irc.Event) {
 		Message:  message,
 	}
 
-	if event.Code == "STQUIT" {
+	if e.Command == "STQUIT" {
 		// Notify channels that the user is in
 		for _, m := range i.bridge.mappings {
 			channel := m.IRCChannel
-			channelObj, ok := i.Connection.GetChannel(channel)
-			if !ok {
+			channelObj := i.Client.LookupChannel(channel)
+			if channelObj == nil {
 				log.WithField("channel", channel).WithField("who", who).Warnln("Trying to process QUIT. Channel not found in irc listener cache.")
 				continue
 			}
-			if _, ok := channelObj.GetUser(who); !ok {
+
+			if channelObj.UserIn(who) {
 				continue
 			}
 			msg.IRCChannel = channel
 			i.bridge.discordMessagesChan <- msg
 		}
 	} else {
-		msg.IRCChannel = event.Arguments[0]
+		msg.IRCChannel = e.Params[0]
 		i.bridge.discordMessagesChan <- msg
 	}
 }
 
-// FIXME: the user might not be on any channel that we're in and that would
-// lead to incorrect assumptions the user doesn't exist!
-// Good way to check is to utilize ISON
-func (i *ircListener) DoesUserExist(user string) bool {
-	ret := false
-	i.IterChannels(func(name string, ch *irc.Channel) {
-		if !ret {
-			_, ret = ch.GetUser(user)
+func (i *ircListener) DoesUserExist(user string) (exists bool) {
+	exists = false
+	i.Client.Cmd.SendRawf("ISON %s", user)
+	i.Client.Handlers.AddTmp("303", 5*time.Second, func(c *irc.Client, e irc.Event) bool {
+		if e.Params[len(e.Params)] == user {
+			exists = true
 		}
+		return false
 	})
-	return ret
+	return
 }
 
 func (i *ircListener) SetDebugMode(debug bool) {
@@ -206,22 +190,14 @@ func (i *ircListener) SetDebugMode(debug bool) {
 	// i.Debug = debug
 }
 
-func (i *ircListener) OnWelcome(e *irc.Event) {
-	// Execute prejoin commands
-	for _, com := range i.bridge.Config.IRCListenerPrejoinCommands {
-		i.SendRaw(strings.ReplaceAll(com, "${NICK}", i.GetNick()))
+func (i *ircListener) JoinChannels(c *irc.Client, e irc.Event) {
+	for _, mapping := range i.bridge.mappings {
+		c.Cmd.Join(mapping.IRCChannel)
 	}
-
-	// Join all channels
-	i.JoinChannels()
 }
 
-func (i *ircListener) JoinChannels() {
-	i.SendRaw(i.bridge.GetJoinCommand(i.bridge.mappings))
-}
-
-func (i *ircListener) OnJoinChannel(e *irc.Event) {
-	log.Infof("Listener has joined IRC channel %s.", e.Arguments[1])
+func (i *ircListener) OnJoinChannel(c *irc.Client, e irc.Event) {
+	log.Infof("Listener has joined IRC channel %s.", e.Params[1])
 }
 
 func (i *ircListener) isPuppetNick(nick string) bool {
@@ -234,18 +210,18 @@ func (i *ircListener) isPuppetNick(nick string) bool {
 	return false
 }
 
-func (i *ircListener) OnPrivateMessage(e *irc.Event) {
+func (i *ircListener) OnPrivateMessage(c *irc.Client, e irc.Event) {
 	// Ignore private messages
-	if string(e.Arguments[0][0]) != "#" {
+	if string(e.Params[0][0]) != "#" {
 		// If you decide to extend this to respond to PMs, make sure
 		// you do not respond to NOTICEs, see issue #50.
 		return
 	}
 
-	if strings.TrimSpace(e.Message()) == "" || // Discord doesn't accept an empty message
-		i.isPuppetNick(e.Nick) || // ignore msg's from our puppets
-		i.bridge.ircManager.isIgnoredHostmask(e.Source) || //ignored hostmasks
-		i.bridge.ircManager.isFilteredIRCMessage(e.Message()) { // filtered
+	if strings.TrimSpace(e.Last()) == "" || // Discord doesn't accept an empty message
+		i.isPuppetNick(e.Source.Name) || // ignore msg's from our puppets
+		i.bridge.ircManager.isIgnoredHostmask(e.Source.String()) || // ignored hostmasks
+		i.bridge.ircManager.isFilteredIRCMessage(e.Last()) { // filtered
 		return
 	}
 
@@ -256,18 +232,18 @@ func (i *ircListener) OnPrivateMessage(e *irc.Event) {
 
 	msg := strings.NewReplacer(
 		replacements...,
-	).Replace(e.Message())
+	).Replace(e.Last())
 
-	if e.Code == "CTCP_ACTION" {
+	if e.Command == "CTCP_ACTION" {
 		msg = "_" + msg + "_"
 	}
 
 	msg = ircf.BlocksToMarkdown(ircf.Parse(msg))
 
-	go func(e *irc.Event) {
+	go func(e irc.Event) {
 		i.bridge.discordMessagesChan <- IRCMessage{
-			IRCChannel: e.Arguments[0],
-			Username:   e.Nick,
+			IRCChannel: e.Params[0],
+			Username:   e.Source.Name,
 			Message:    msg,
 		}
 	}(e)

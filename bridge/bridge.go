@@ -1,18 +1,18 @@
 package bridge
 
 import (
-	"crypto/tls"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
 
+	irc "git.tcp.direct/kayos/girc-tcpd"
 	"github.com/gobwas/glob"
 	"github.com/matterbridge/discordgo"
 	"github.com/pkg/errors"
-	"github.com/qaisjp/go-discord-irc/irc/varys"
-	irc "github.com/qaisjp/go-ircevent"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/qaisjp/go-discord-irc/irc/varys"
 )
 
 // Config to be passed to New
@@ -34,7 +34,6 @@ type Config struct {
 	DiscordAllowed  map[string]struct{} // Discord user IDs to only bridge
 	ConnectionLimit int                 // number of IRC connections we can spawn
 
-	IRCPuppetPrejoinCommands   []string
 	IRCListenerPrejoinCommands []string
 
 	// filters
@@ -212,13 +211,13 @@ func (b *Bridge) SetChannelMappings(inMappings map[string]string) error {
 			}
 		}
 
-		b.ircListener.SendRaw("PART " + strings.Join(rmChannels, ","))
+		b.ircListener.Client.Cmd.SendRaw("PART " + strings.Join(rmChannels, ","))
 		if err := b.ircManager.varys.SendRaw("", varys.InterpolationParams{}, "PART "+strings.Join(rmChannels, ",")); err != nil {
 			panic(err.Error())
 		}
 
 		// The bots needs to join the new mappings
-		b.ircListener.JoinChannels()
+		b.ircListener.JoinChannels(b.ircListener.Client, irc.Event{})
 		for _, conn := range b.ircManager.ircConnections {
 			conn.JoinChannels()
 		}
@@ -265,7 +264,7 @@ func New(conf *Config) (*Bridge, error) {
 // SetIRCListenerName changes the username of the listener bot.
 func (b *Bridge) SetIRCListenerName(name string) {
 	b.Config.IRCListenerName = name
-	b.ircListener.Nick(name)
+	b.ircListener.Client.Cmd.Nick(name)
 }
 
 // SetDebugMode allows you to control debug logging.
@@ -283,39 +282,12 @@ func (b *Bridge) Open() (err error) {
 		return errors.Wrap(err, "can't open discord")
 	}
 
-	err = b.ircListener.Connect(b.Config.IRCServer)
+	err = b.ircListener.Connect()
 	if err != nil {
 		return errors.Wrap(err, "can't open irc connection")
 	}
 
-	// run listener loop
-	go b.ircListener.Loop()
-
 	return
-}
-
-// SetupIRCConnection sets up an IRC connection with config settings like
-// UseTLS, InsecureSkipVerify, and WebIRCPass.
-func (b *Bridge) SetupIRCConnection(con *irc.Connection, hostname, ip string) {
-	if !b.Config.NoTLS {
-		con.UseTLS = true
-		con.TLSConfig = &tls.Config{
-			InsecureSkipVerify: b.Config.InsecureSkipVerify,
-		}
-	}
-
-	// On kick, rejoin the channel
-	con.AddCallback("KICK", func(e *irc.Event) {
-		if e.Arguments[1] == con.GetNick() {
-			con.Join(e.Arguments[0])
-		}
-	})
-
-	con.Password = b.Config.IRCServerPass
-
-	if b.Config.WebIRCPass != "" {
-		con.WebIRC = fmt.Sprintf("%s discord %s %s", b.Config.WebIRCPass, hostname, ip)
-	}
 }
 
 // GetJoinCommand produces a JOIN command based on the provided mappings
@@ -481,7 +453,7 @@ func (b *Bridge) loop() {
 		// Done!
 		case <-b.done:
 			b.discord.Close()
-			b.ircListener.Quit()
+			b.ircListener.Client.Quit("yeet")
 			b.ircManager.Close()
 			close(b.done)
 

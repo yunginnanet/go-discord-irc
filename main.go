@@ -13,10 +13,11 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/gobwas/glob"
 	"github.com/pkg/errors"
-	"github.com/qaisjp/go-discord-irc/bridge"
-	ircnick "github.com/qaisjp/go-discord-irc/irc/nick"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
+
+	"github.com/qaisjp/go-discord-irc/bridge"
+	ircnick "github.com/qaisjp/go-discord-irc/irc/nick"
 )
 
 func main() {
@@ -97,9 +98,6 @@ func main() {
 		*insecure = viper.GetBool("insecure")
 	}
 	//
-	viper.SetDefault("irc_puppet_prejoin_commands", []string{"MODE ${NICK} +D"})
-	ircPuppetPrejoinCommands := viper.GetStringSlice("irc_puppet_prejoin_commands") // Commands for each connection to send before joining channels
-	//
 	viper.SetDefault("avatar_url", "https://robohash.org/${USERNAME}.png?set=set4")
 	avatarURL := viper.GetString("avatar_url")
 	//
@@ -153,7 +151,6 @@ func main() {
 		IRCListenerName:            ircUsername,
 		IRCServer:                  ircServer,
 		IRCServerPass:              ircPassword,
-		IRCPuppetPrejoinCommands:   ircPuppetPrejoinCommands,
 		IRCListenerPrejoinCommands: ircListenerPrejoinCommands,
 		ConnectionLimit:            connectionLimit,
 		IRCIgnores:                 matchers,
