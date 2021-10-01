@@ -6,7 +6,9 @@ package varys
 
 import (
 	"crypto/tls"
+	"fmt"
 	"strings"
+	"time"
 
 	irc "git.tcp.direct/kayos/girc-tcpd"
 )
@@ -14,10 +16,11 @@ import (
 type Varys struct {
 	connConfig SetupParams
 	uidToConns map[string]*irc.Client
+	done       bool
 }
 
 func NewVarys() *Varys {
-	return &Varys{uidToConns: make(map[string]*irc.Client)}
+	return &Varys{uidToConns: make(map[string]*irc.Client), done: false}
 }
 
 func (v *Varys) connCall(uid string, fn func(*irc.Client)) {
@@ -86,14 +89,20 @@ type ConnectParams struct {
 	Callbacks map[string]func(c *irc.Client, e irc.Event)
 }
 
+func dontPanic(c *irc.Client, e *irc.HandlerError) {
+	fmt.Println("PANIC!!", c.Config.Name, c.Config.User, c.Config.Nick, c.Config.Server, "PANIC!!")
+	fmt.Println("PANIC!!", e, "PANIC!!")
+}
 func (v *Varys) Connect(params ConnectParams, _ *struct{}) error {
 	conn := irc.Config{
-		Server:  v.connConfig.Server,
-		Port:    v.connConfig.Port,
-		Nick:    params.Nick,
-		User:    params.Username,
-		Name:    params.RealName,
-		Version: "tcp.direct",
+		Server:      v.connConfig.Server,
+		Port:        v.connConfig.Port,
+		Nick:        params.Nick,
+		User:        params.Username,
+		Name:        params.RealName,
+		Version:     "tcp.direct",
+		AllowFlood:  false,
+		RecoverFunc: dontPanic,
 
 		SSL: false,
 	}
@@ -124,9 +133,15 @@ func (v *Varys) Connect(params ConnectParams, _ *struct{}) error {
 	}
 
 	go func() {
-		err := client.Connect()
-		if err != nil {
-			println("error opening irc connection: %w", err)
+		for {
+			if v.done {
+				return
+			}
+			err := client.Connect()
+			if err != nil {
+				println("error opening irc connection: %w", err.Error())
+			}
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
