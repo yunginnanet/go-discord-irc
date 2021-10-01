@@ -8,8 +8,8 @@ import (
 
 	"github.com/42wim/matterbridge/bridge/discord/transmitter"
 
-	"github.com/qaisjp/go-discord-irc/dstate"
-	ircnick "github.com/qaisjp/go-discord-irc/irc/nick"
+	"bridg/dstate"
+	ircnick "bridg/irc/nick"
 
 	"github.com/matterbridge/discordgo"
 	"github.com/pkg/errors"

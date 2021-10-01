@@ -13,8 +13,8 @@ import (
 	irc "git.tcp.direct/kayos/girc-tcpd"
 	log "github.com/sirupsen/logrus"
 
-	ircnick "github.com/qaisjp/go-discord-irc/irc/nick"
-	"github.com/qaisjp/go-discord-irc/irc/varys"
+	ircnick "bridg/irc/nick"
+	"bridg/irc/varys"
 )
 
 // DevMode is a hack

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	irc "git.tcp.direct/kayos/girc-tcpd"
 )
@@ -17,11 +16,11 @@ import (
 type Varys struct {
 	connConfig SetupParams
 	uidToConns map[string]*irc.Client
-	done       bool
+	Quit       chan bool
 }
 
 func NewVarys() *Varys {
-	return &Varys{uidToConns: make(map[string]*irc.Client), done: false}
+	return &Varys{uidToConns: make(map[string]*irc.Client), Quit: make(chan bool)}
 }
 
 func (v *Varys) connCall(uid string, fn func(*irc.Client)) {
@@ -44,6 +43,8 @@ type Client interface {
 	QuitIfConnected(uid string, quitMsg string) error
 	Nick(uid string, nick string) error
 
+	QuitAll()
+
 	// SendRaw supports a blank uid to send to all connections.
 	SendRaw(uid string, params InterpolationParams, messages ...string) error
 	// GetNick gets the current connection's nick
@@ -64,6 +65,7 @@ type SetupParams struct {
 
 func (v *Varys) Setup(params SetupParams, _ *struct{}) error {
 	v.connConfig = params
+	v.Quit = make(chan bool)
 	return nil
 }
 
@@ -136,19 +138,32 @@ func (v *Varys) Connect(params ConnectParams, _ *struct{}) error {
 		client.Handlers.Add(eventcode, callback)
 	}
 
+	start := make(chan bool)
+
 	go func() {
 		for {
-			if v.done {
+			select {
+			case <-v.Quit:
+				for _, c := range v.uidToConns {
+					if c == nil {
+						continue
+					}
+					if c.IsConnected() {
+						c.Quit("shutting down")
+					}
+				}
 				return
+			case <-start:
+				err := client.Connect()
+				if err != nil {
+					fmt.Printf("error opening irc connection: %s", err.Error())
+				}
+			default:
+				//
 			}
-			err := client.Connect()
-			if err != nil {
-				println("error opening irc connection: %w", err.Error())
-			}
-			time.Sleep(1 * time.Second)
 		}
 	}()
-
+	start <- true
 	v.uidToConns[params.UID] = client
 	return nil
 }

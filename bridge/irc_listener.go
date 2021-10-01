@@ -10,7 +10,7 @@ import (
 	irc "git.tcp.direct/kayos/girc-tcpd"
 	log "github.com/sirupsen/logrus"
 
-	ircf "github.com/qaisjp/go-discord-irc/irc/format"
+	ircf "bridg/irc/format"
 )
 
 type ircListener struct {
@@ -186,7 +186,7 @@ func (i *ircListener) DoesUserExist(user string) (exists bool) {
 		if e.Params[len(e.Params)-1] == user {
 			exists = true
 		}
-		return false
+		return exists
 	})
 	return
 }

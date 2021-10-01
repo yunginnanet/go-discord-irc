@@ -8,7 +8,7 @@ import (
 	irc "git.tcp.direct/kayos/girc-tcpd"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/qaisjp/go-discord-irc/irc/varys"
+	"bridg/irc/varys"
 )
 
 // An ircConnection should only ever communicate with its manager
@@ -49,19 +49,13 @@ func (i *ircConnection) Connected() bool {
 }
 
 func (i *ircConnection) OnWelcome(c *irc.Client, e irc.Event) {
-	// execute puppet prejoin commands
-	err := i.manager.varys.SendRaw(i.discord.ID, varys.InterpolationParams{Nick: true})
-	if err != nil {
-		panic(err.Error())
-	}
-
-	i.JoinChannels()
-
-	// just in case NickServ, Q:Lines, or otherwise force our nick to be not what we expect!
-	i.manager.puppetNicks[i.GetNick()] = i
+	go i.JoinChannels()
 
 	go func(i *ircConnection) {
 		for m := range i.messages {
+			if len(m.Message) < 1 {
+				continue
+			}
 			msg := m.Message
 			if m.IsAction {
 				msg = fmt.Sprintf("\001ACTION %s\001", msg)

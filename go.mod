@@ -1,4 +1,4 @@
-module github.com/qaisjp/go-discord-irc
+module bridg
 
 go 1.15
 

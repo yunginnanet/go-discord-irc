@@ -9,6 +9,10 @@ func NewMemClient() Client {
 	return &memClient{varys: NewVarys()}
 }
 
+func (c *memClient) QuitAll() {
+	c.varys.Quit <- true
+}
+
 func (c *memClient) Setup(params SetupParams) error {
 	return c.varys.Setup(params, nil)
 }

@@ -18,6 +18,10 @@ func NewNetClient() Client {
 	return &netClient{client: client}
 }
 
+func (c *netClient) QuitAll() {
+	panic("not implemented")
+}
+
 func (c *netClient) Setup(params SetupParams) error {
 	var reply struct{}
 	return c.client.Call("Varys.Setup", params, &reply)

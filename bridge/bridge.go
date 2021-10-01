@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/qaisjp/go-discord-irc/irc/varys"
+	"bridg/irc/varys"
 )
 
 // Config to be passed to New
@@ -122,18 +122,20 @@ func (b *Bridge) load(opts *Config) error {
 func (b *Bridge) SetChannelMappings(inMappings map[string]string) error {
 	var mappings []Mapping
 	ircChannelKeys := make(map[string]string, len(mappings))
-	for irc, discord := range inMappings {
-		ircParts := strings.Split(irc, " ")
+	for ircRoom, discordRoom := range inMappings {
+		ircParts := strings.Split(ircRoom, " ")
 		ircChannel := ircParts[0]
 		if parts := len(ircParts); parts != 1 && parts > 2 {
-			log.Errorf("IRC channel irc %+v (to discord %+v) is invalid. Expected 0 or 1 spaces in the string. Ignoring.", irc, discord)
+			log.Errorf("IRC channel irc %+v (to discord %+v) is invalid. Expected 0 or 1 spaces in the string. Ignoring.", ircRoom, discordRoom)
 			continue
-		} else if parts == 2 {
-			ircChannelKeys[ircChannel] = ircParts[1]
+		} else {
+			if parts == 2 {
+				ircChannelKeys[ircChannel] = ircParts[1]
+			}
 		}
 
 		mappings = append(mappings, Mapping{
-			DiscordChannel: discord,
+			DiscordChannel: discordRoom,
 			IRCChannel:     ircChannel,
 		})
 	}
@@ -191,7 +193,7 @@ func (b *Bridge) SetChannelMappings(inMappings map[string]string) error {
 		}
 
 		// The bots needs to leave the remove mappings
-		rmChannels := []string{}
+		var rmChannels []string
 		for _, mapping := range removedMappings {
 			// Looking for the irc channel to remove
 			// inside our list of newly added channels.
@@ -211,7 +213,9 @@ func (b *Bridge) SetChannelMappings(inMappings map[string]string) error {
 			}
 		}
 
-		b.ircListener.Client.Cmd.SendRaw("PART " + strings.Join(rmChannels, ","))
+		if err := b.ircListener.Client.Cmd.SendRaw("PART " + strings.Join(rmChannels, ",")); err != nil {
+			fmt.Println(err.Error())
+		}
 		if err := b.ircManager.varys.SendRaw("", varys.InterpolationParams{}, "PART "+strings.Join(rmChannels, ",")); err != nil {
 			panic(err.Error())
 		}
@@ -452,11 +456,13 @@ func (b *Bridge) loop() {
 
 		// Done!
 		case <-b.done:
-			b.discord.Close()
-			b.ircListener.Client.Quit("yeet")
+			if err := b.discord.Close(); err != nil {
+				fmt.Println(err.Error())
+			}
+			b.ircListener.Client.Quit("bridge shutting down")
 			b.ircManager.Close()
+			b.ircManager.varys.QuitAll()
 			close(b.done)
-
 			return
 		}
 

@@ -16,8 +16,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 
-	"github.com/qaisjp/go-discord-irc/bridge"
-	ircnick "github.com/qaisjp/go-discord-irc/irc/nick"
+	"bridg/bridge"
+	ircnick "bridg/irc/nick"
 )
 
 func main() {
@@ -189,7 +189,8 @@ func main() {
 	go func() {
 		err = dib.Open()
 		if err != nil {
-			log.WithField("error", err).Fatalln("Go-Discord-IRC failed to start.")
+			// log.WithField("error", err).Fatalln("Go-Discord-IRC failed to start.")
+			panic(err)
 			return
 		}
 	}()
