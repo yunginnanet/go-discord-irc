@@ -53,6 +53,7 @@ type SetupParams struct {
 	InsecureSkipVerify bool // Controls tls.Config.InsecureSkipVerify, if using TLS
 
 	Server         string
+	Port           int
 	ServerPassword string
 	WebIRCPassword string
 }
@@ -87,6 +88,8 @@ type ConnectParams struct {
 
 func (v *Varys) Connect(params ConnectParams, _ *struct{}) error {
 	conn := irc.Config{
+		Server:  v.connConfig.Server,
+		Port:    v.connConfig.Port,
 		Nick:    params.Nick,
 		User:    params.Username,
 		Name:    params.RealName,

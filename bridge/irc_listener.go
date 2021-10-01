@@ -3,7 +3,7 @@ package bridge
 import (
 	"crypto/tls"
 	"fmt"
-	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,17 +21,23 @@ type ircListener struct {
 }
 
 func newIRCListener(dib *Bridge, webIRCPass string) *ircListener {
+	split := strings.Split(dib.Config.IRCServer, ":")
+	prt, err := strconv.Atoi(split[1])
+	if err != nil {
+		panic(err)
+	}
 	var ircConfig = irc.Config{
-		Server:     dib.Config.IRCListenerName,
+		Server:     split[0],
+		Port:       prt,
 		User:       dib.Config.IRCListenerName,
 		Nick:       dib.Config.IRCListenerName,
 		ServerPass: dib.Config.IRCServerPass,
 		Version:    "tcp.direct",
 	}
 
-	if dib.Config.Debug {
+	/*if dib.Config.Debug {
 		ircConfig.Debug = os.Stdout
-	}
+	}*/
 
 	if !dib.Config.NoTLS {
 		ircConfig.SSL = true
@@ -177,7 +183,7 @@ func (i *ircListener) DoesUserExist(user string) (exists bool) {
 	exists = false
 	i.Client.Cmd.SendRawf("ISON %s", user)
 	i.Client.Handlers.AddTmp("303", 5*time.Second, func(c *irc.Client, e irc.Event) bool {
-		if e.Params[len(e.Params)] == user {
+		if e.Params[len(e.Params)-1] == user {
 			exists = true
 		}
 		return false

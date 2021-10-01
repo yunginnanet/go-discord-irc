@@ -3,6 +3,7 @@ package bridge
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -37,13 +38,21 @@ func newIRCManager(bridge *Bridge) (*IRCManager, error) {
 		bridge:         bridge,
 	}
 
+	split := strings.Split(conf.IRCServer, ":")
+	srv := split[0]
+	port, err := strconv.Atoi(split[1])
+	if err != nil {
+		panic(err)
+	}
+
 	// Set up varys
 	m.varys = varys.NewMemClient()
-	err := m.varys.Setup(varys.SetupParams{
+	err = m.varys.Setup(varys.SetupParams{
 		UseTLS:             !conf.NoTLS,
 		InsecureSkipVerify: conf.InsecureSkipVerify,
 
-		Server:         conf.IRCServer,
+		Server:         srv,
+		Port:           port,
 		ServerPassword: conf.IRCServerPass,
 		WebIRCPassword: conf.WebIRCPass,
 	})
