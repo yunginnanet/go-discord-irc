@@ -7,6 +7,7 @@ package varys
 import (
 	"crypto/tls"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -93,7 +94,10 @@ func dontPanic(c *irc.Client, e *irc.HandlerError) {
 	fmt.Println("PANIC!!", c.Config.Name, c.Config.User, c.Config.Nick, c.Config.Server, "PANIC!!")
 	fmt.Println("PANIC!!", e, "PANIC!!")
 }
+
 func (v *Varys) Connect(params ConnectParams, _ *struct{}) error {
+	defuckify, _ := regexp.Compile("[^a-zA-Z0-9]+")
+	params.Username = defuckify.ReplaceAllString(params.Username, "o")
 	conn := irc.Config{
 		Server:      v.connConfig.Server,
 		Port:        v.connConfig.Port,

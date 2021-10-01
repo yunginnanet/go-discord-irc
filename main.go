@@ -186,12 +186,13 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
 	// Open the bot
-	err = dib.Open()
-	if err != nil {
-		log.WithField("error", err).Fatalln("Go-Discord-IRC failed to start.")
-		return
-	}
-
+	go func() {
+		err = dib.Open()
+		if err != nil {
+			log.WithField("error", err).Fatalln("Go-Discord-IRC failed to start.")
+			return
+		}
+	}()
 	// Inform the user that things are happening!
 	log.Infoln("Go-Discord-IRC is now running. Press Ctrl-C to exit.")
 
