@@ -198,7 +198,12 @@ func (i *ircListener) SetDebugMode(debug bool) {
 
 func (i *ircListener) JoinChannels(c *irc.Client, e irc.Event) {
 	for _, mapping := range i.bridge.mappings {
-		c.Cmd.Join(mapping.IRCChannel)
+		key, keyed := i.bridge.ircChannelKeys[mapping.IRCChannel]
+		if !keyed {
+			c.Cmd.Join(mapping.IRCChannel)
+		} else {
+			c.Cmd.JoinKey(mapping.IRCChannel, key)
+		}
 	}
 }
 

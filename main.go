@@ -191,7 +191,6 @@ func main() {
 		if err != nil {
 			// log.WithField("error", err).Fatalln("Go-Discord-IRC failed to start.")
 			panic(err)
-			return
 		}
 	}()
 	// Inform the user that things are happening!

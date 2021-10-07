@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	irc "git.tcp.direct/kayos/girc-tcpd"
@@ -341,6 +342,7 @@ func (b *Bridge) GetMappingByDiscord(channel string) (Mapping, bool) {
 var emojiRegex = regexp.MustCompile("(:[a-zA-Z_-]+:)")
 
 func (b *Bridge) loop() {
+	var discordmu = &sync.Mutex{}
 	for {
 		select {
 
@@ -370,6 +372,7 @@ func (b *Bridge) loop() {
 					username += `.` // <- zero width space in here, ayylmao
 				}
 			}
+			discordmu.Lock()
 
 			content := msg.Message
 
@@ -428,6 +431,7 @@ func (b *Bridge) loop() {
 					}
 				}()
 			}
+			discordmu.Unlock()
 
 		// Messages from Discord to IRC
 		case msg := <-b.discordMessageEventsChan:
