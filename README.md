@@ -1,11 +1,15 @@
 # go-discord-irc
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/qaisjp/go-discord-irc)](https://goreportcard.com/report/github.com/qaisjp/go-discord-irc)
-[![GoDoc](https://godoc.org/github.com/qaisjp/go-discord-irc?status.svg)](https://godoc.org/github.com/qaisjp/go-discord-irc)
+[![Go Report Card](https://goreportcard.com/badge/github.com/yunginnanet/go-discord-irc)](https://goreportcard.com/report/github.com/yunginnanet/go-discord-irc)
+[![GoDoc](https://godoc.org/github.com/yunginnanet/go-discord-irc?status.svg)](https://godoc.org/github.com/yunginnanet/go-discord-irc)
+
+## Fork changes
+
+[Click here to see the changes made in this fork](https://github.com/qaisjp/go-discord-irc/compare/master...yunginnanet:master)
 
 [![Preview](https://i.imgur.com/YpCqzdn.gif)](https://i.imgur.com/YpCqzdn.webm)
 
-**Is this being maintained?** Yes. But I want to merge all this functionality into the much superior
+**Is this being maintained?** Who knows? You sure do ask a lot of questions.
 [matterbridge by 42wim](https://github.com/42wim/matterbridge).
 
 This is IRC to Discord bridge was originally built for
