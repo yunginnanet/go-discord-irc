@@ -3,7 +3,7 @@ module bridg
 go 1.15
 
 require (
-	git.tcp.direct/kayos/girc-tcpd v0.0.0-20210905150122-4e0aac9cba2f
+	git.tcp.direct/kayos/girc-atomic v0.3.1
 	github.com/42wim/matterbridge v1.22.0
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/gobwas/glob v0.2.3

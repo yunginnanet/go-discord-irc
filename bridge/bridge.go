@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	irc "git.tcp.direct/kayos/girc-tcpd"
+	irc "git.tcp.direct/kayos/girc-atomic"
 	"github.com/gobwas/glob"
 	"github.com/matterbridge/discordgo"
 	"github.com/pkg/errors"

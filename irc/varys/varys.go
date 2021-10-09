@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	irc "git.tcp.direct/kayos/girc-tcpd"
+	irc "git.tcp.direct/kayos/girc-atomic"
 )
 
 type Varys struct {

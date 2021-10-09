@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	irc "git.tcp.direct/kayos/girc-tcpd"
+	irc "git.tcp.direct/kayos/girc-atomic"
 	log "github.com/sirupsen/logrus"
 
 	ircf "bridg/irc/format"

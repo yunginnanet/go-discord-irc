@@ -10,7 +10,7 @@ import (
 	"github.com/mozillazg/go-unidecode"
 	"github.com/pkg/errors"
 
-	irc "git.tcp.direct/kayos/girc-tcpd"
+	irc "git.tcp.direct/kayos/girc-atomic"
 	log "github.com/sirupsen/logrus"
 
 	ircnick "bridg/irc/nick"
